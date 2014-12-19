@@ -48,5 +48,13 @@ func runImport(args []string) (exit int) {
 		continue
 	}
 
+	labels := types.Labels{
+		types.Label{
+			Name:  "version",
+			Value: "21.0.1",
+		},
+	}
+	ds.GetAci("example.com/fedora", labels, types.Hash{})
+
 	return 0
 }

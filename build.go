@@ -109,10 +109,10 @@ func build(args []string) error {
 	}
 	dependencies := im.Dependencies
 	for _, d := range dependencies {
-		//if _, ok := seenImages[d.Hash]
-		log.V(1).Infof("Dependency Hash: %s\n", d.Hash)
-		if d.Hash.Val != "" {
-			err = acirenderer.RenderImage(d.Hash.String(), tmpdir, ds)
+		//if _, ok := seenImages[d.ImageID]
+		log.V(1).Infof("Dependency ImageID: %s\n", d.ImageID)
+		if d.ImageID.Val != "" {
+			err = acirenderer.RenderImage(d.App, d.Labels, tmpdir, ds)
 			if err != nil {
 				return err
 			}

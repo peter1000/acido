@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 
+	"github.com/appc/spec/discovery"
 	"github.com/coreos/fleet/log"
 	"github.com/coreos/rocket/cas"
 	"github.com/sgotti/acido/acirenderer"
@@ -25,7 +26,8 @@ func init() {
 func runExtract(args []string) (exit int) {
 	ds := cas.NewStore(globalFlags.Dir)
 
-	hash := args[0]
+	name := args[0]
+	app, err := discovery.NewAppFromString(name)
 
 	tmpdir, err := ioutil.TempDir(globalFlags.WorkDir, "")
 	if err != nil {
@@ -33,7 +35,7 @@ func runExtract(args []string) (exit int) {
 		return 1
 	}
 	log.V(1).Infof("tmpdir: %s", tmpdir)
-	err = acirenderer.RenderImage(hash, tmpdir, ds)
+	err = acirenderer.RenderImage(app.Name, app.Labels, tmpdir, ds)
 	if err != nil {
 		log.Errorf("error: %v", err)
 		return 1

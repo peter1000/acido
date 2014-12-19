@@ -29,37 +29,47 @@ func init() {
 func startBuild(args []string) error {
 	ds := cas.NewStore(globalFlags.Dir)
 
-	baseHashStr := args[0]
-	baseHash, err := types.NewHash(baseHashStr)
+	name := args[0]
+	app, err := util.NewAciFromString(name)
 	if err != nil {
 		return err
 	}
 
+	labels := types.Labels{}
+	for n, v := range app.Labels {
+		label, _ := types.NewLabel(n, v)
+		labels = append(labels, *label)
+	}
+
+	log.Infof("app: %v", app)
 	tmpdir, err := ioutil.TempDir(globalFlags.WorkDir, "")
 	if err != nil {
 		return err
 	}
 	log.V(1).Infof("tmpdir: %s", tmpdir)
-	baseim, err := util.GetImageManifest(baseHash, ds)
+	baseim, basekey, err := ds.GetAci(app.Name, labels, types.Hash{})
 	if err != nil {
 		return err
 	}
 
-	err = acirenderer.RenderImage(baseHashStr, tmpdir, ds)
+	err = acirenderer.RenderImage(app.Name, labels, tmpdir, ds)
 	if err != nil {
 		return err
 	}
 	log.Infof("Image extracted to %s", tmpdir)
 
+	baseHash, _ := types.NewHash(basekey)
 	version, _ := types.NewSemVer("0.1.0")
 	im := schema.ImageManifest{
 		ACKind:    "ImageManifest",
 		ACVersion: *version,
-		Name:      "example.com/changeme",
+		Name:      baseim.Name,
+		Labels:    baseim.Labels,
 		Dependencies: types.Dependencies{
 			types.Dependency{
-				Name: baseim.Name,
-				Hash: *baseHash,
+				App:     baseim.Name,
+				ImageID: *baseHash,
+				Labels:  baseim.Labels,
 			},
 		},
 	}

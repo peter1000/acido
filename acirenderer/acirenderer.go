@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	ptar "github.com/sgotti/acido/pkg/tar"
-	"github.com/sgotti/acido/util"
 
 	"github.com/appc/spec/schema"
 	"github.com/appc/spec/schema/types"
@@ -18,8 +17,8 @@ import (
 // And Image contains the ImageManifest, the Hash and the Level in the dependency tree of this image
 type Image struct {
 	im    *schema.ImageManifest
-	Hash  *types.Hash
-	Level uint16
+	key   string
+	level uint16
 }
 
 // An ordered slice made of Image. Represent a flatten dependency tree.
@@ -32,38 +31,35 @@ type Images []Image
 // Returns the ImageManifest and the Hash of the requested dependency
 // This is a fake function that should be replaced by a real image discovery
 // and dependency matching
-func fakeDepDiscovery(dep types.Dependency, ds *cas.Store) (*schema.ImageManifest, *types.Hash, error) {
-	hash := dep.Hash
-	if hash.Empty() {
-		return nil, nil, fmt.Errorf("TODO. Needed dependency hash\n")
-	}
-	im, err := util.GetImageManifest(&hash, ds)
-	if err != nil {
-		return nil, nil, err
-	}
-	return im, &hash, nil
+func fakeDepDiscovery(dep types.Dependency, ds *cas.Store) (*schema.ImageManifest, string, error) {
+	//if hash.Empty() {
+	//	return nil, nil, fmt.Errorf("TODO. Needed dependency hash\n")
+	//}
+	return ds.GetAci(dep.App, dep.Labels, dep.ImageID)
 }
 
 // Returns an ordered list of Image type to be rendered
-func CreateDepList(hash *types.Hash, ds *cas.Store) (Images, error) {
-	im, err := util.GetImageManifest(hash, ds)
+func CreateDepList(name types.ACName, labels types.Labels, ds *cas.Store) (Images, error) {
+	im, key, err := ds.GetAci(name, labels, types.Hash{})
 	if err != nil {
 		return nil, err
 	}
 	imgsl := list.New()
-	img := Image{im: im, Hash: hash, Level: 0}
+	img := Image{im: im, key: key, level: 0}
 	imgsl.PushFront(img)
+	fmt.Printf("img im: %+v\n", img.im)
 
 	// Create a flatten dependency tree. Use a LinkedList to be able to insert elements in the list while working on it.
 	for el := imgsl.Front(); el != nil; el = el.Next() {
 		img := el.Value.(Image)
 		dependencies := img.im.Dependencies
 		for _, d := range dependencies {
-			im, hash, err := fakeDepDiscovery(d, ds)
+			im, key, err := fakeDepDiscovery(d, ds)
 			if err != nil {
 				return nil, err
 			}
-			depimg := Image{im: im, Hash: hash, Level: img.Level + 1}
+			depimg := Image{im: im, key: key, level: img.level + 1}
+			fmt.Printf("depimg: %+v\n", depimg)
 			imgsl.InsertAfter(depimg, el)
 		}
 	}
@@ -76,15 +72,13 @@ func CreateDepList(hash *types.Hash, ds *cas.Store) (Images, error) {
 }
 
 // Given an image hash already available in the store (ds), build its dependency list and render it inside dir
-func RenderImage(hashStr string, dir string, ds *cas.Store) error {
-	hash, err := types.NewHash(hashStr)
+func RenderImage(name types.ACName, labels types.Labels, dir string, ds *cas.Store) error {
+	imgs, err := CreateDepList(name, labels, ds)
 	if err != nil {
 		return err
 	}
-	imgs, err := CreateDepList(hash, ds)
-	if err != nil {
-		return err
-	}
+
+	fmt.Printf("imgs: %v\n", imgs)
 
 	if len(imgs) == 0 {
 		return fmt.Errorf("Image list empty")
@@ -92,7 +86,7 @@ func RenderImage(hashStr string, dir string, ds *cas.Store) error {
 
 	// This implementation needs to start from the end of the tree.
 	end := len(imgs) - 1
-	prevlevel := imgs[end].Level
+	prevlevel := imgs[end].level
 	for i := end; i >= 0; i-- {
 		img := imgs[i]
 
@@ -100,15 +94,15 @@ func RenderImage(hashStr string, dir string, ds *cas.Store) error {
 		if err != nil {
 			return err
 		}
-		if img.Level < prevlevel {
-			prevlevel = img.Level
+		if img.level < prevlevel {
+			prevlevel = img.level
 		}
 	}
 	return nil
 }
 
 func renderImage(img Image, dir string, ds *cas.Store, prevlevel uint16) error {
-	rs, err := ds.ReadStream(img.Hash.String())
+	rs, err := ds.ReadStream(img.key)
 	if err != nil {
 		return err
 	}
@@ -120,7 +114,7 @@ func renderImage(img Image, dir string, ds *cas.Store, prevlevel uint16) error {
 	// PathWhitelist (if PathWhitelist isn't empty)
 	// Directories are handled after file removal and all empty directories
 	// not in the pathWhiteList will be removed
-	if img.Level < prevlevel {
+	if img.level < prevlevel {
 		if len(img.im.PathWhitelist) == 0 {
 			return nil
 		}
