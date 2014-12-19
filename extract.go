@@ -6,7 +6,8 @@ import (
 	"github.com/appc/spec/discovery"
 	"github.com/coreos/fleet/log"
 	"github.com/coreos/rocket/cas"
-	"github.com/sgotti/acido/acirenderer"
+	"github.com/coreos/rocket/pkg/acirenderer"
+	"github.com/sgotti/acido/util"
 )
 
 var (
@@ -28,6 +29,10 @@ func runExtract(args []string) (exit int) {
 
 	name := args[0]
 	app, err := discovery.NewAppFromString(name)
+	// TODO temp hack, remove latest label. See appc/spec#86
+	if app.Labels["version"] == "latest" {
+		delete(app.Labels, "version")
+	}
 
 	tmpdir, err := ioutil.TempDir(globalFlags.WorkDir, "")
 	if err != nil {
@@ -35,7 +40,12 @@ func runExtract(args []string) (exit int) {
 		return 1
 	}
 	log.V(1).Infof("tmpdir: %s", tmpdir)
-	err = acirenderer.RenderImage(app.Name, app.Labels, tmpdir, ds)
+	labels, err := util.MapToLabels(app.Labels)
+	if err != nil {
+		log.Errorf("error: %v", err)
+		return 1
+	}
+	err = acirenderer.RenderACI(app.Name, labels, tmpdir, ds)
 	if err != nil {
 		log.Errorf("error: %v", err)
 		return 1

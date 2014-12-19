@@ -4,11 +4,12 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/appc/spec/discovery"
 	"github.com/appc/spec/schema"
 	"github.com/appc/spec/schema/types"
 	"github.com/coreos/fleet/log"
 	"github.com/coreos/rocket/cas"
-	"github.com/sgotti/acido/acirenderer"
+	"github.com/coreos/rocket/pkg/acirenderer"
 	"github.com/sgotti/acido/util"
 )
 
@@ -30,15 +31,13 @@ func startBuild(args []string) error {
 	ds := cas.NewStore(globalFlags.Dir)
 
 	name := args[0]
-	app, err := util.NewAciFromString(name)
+	app, err := discovery.NewAppFromString(name)
 	if err != nil {
 		return err
 	}
-
-	labels := types.Labels{}
-	for n, v := range app.Labels {
-		label, _ := types.NewLabel(n, v)
-		labels = append(labels, *label)
+	// TODO temp hack, remove latest label. See appc/spec#86
+	if app.Labels["version"] == "latest" {
+		delete(app.Labels, "version")
 	}
 
 	log.Infof("app: %v", app)
@@ -47,18 +46,27 @@ func startBuild(args []string) error {
 		return err
 	}
 	log.V(1).Infof("tmpdir: %s", tmpdir)
-	baseim, basekey, err := ds.GetAci(app.Name, labels, types.Hash{})
+
+	labels, err := util.MapToLabels(app.Labels)
 	if err != nil {
+		log.Errorf("error: %v", err)
 		return err
 	}
-
-	err = acirenderer.RenderImage(app.Name, labels, tmpdir, ds)
+	err = acirenderer.RenderACI(app.Name, labels, tmpdir, ds)
 	if err != nil {
 		return err
 	}
 	log.Infof("Image extracted to %s", tmpdir)
 
-	baseHash, _ := types.NewHash(basekey)
+	baseImageID, err := ds.GetACI(app.Name, labels)
+	if err != nil {
+		return err
+	}
+	baseim, err := ds.GetImageManifest(baseImageID)
+	if err != nil {
+		return err
+	}
+
 	version, _ := types.NewSemVer("0.1.0")
 	im := schema.ImageManifest{
 		ACKind:    "ImageManifest",
@@ -68,7 +76,7 @@ func startBuild(args []string) error {
 		Dependencies: types.Dependencies{
 			types.Dependency{
 				App:     baseim.Name,
-				ImageID: *baseHash,
+				ImageID: &baseImageID,
 				Labels:  baseim.Labels,
 			},
 		},

@@ -12,7 +12,7 @@ import (
 	"github.com/appc/spec/pkg/tarheader"
 	"github.com/coreos/fleet/log"
 	"github.com/coreos/rocket/cas"
-	"github.com/sgotti/acido/acirenderer"
+	"github.com/coreos/rocket/pkg/acirenderer"
 	"github.com/sgotti/acido/fsdiffer"
 	"github.com/sgotti/acido/util"
 )
@@ -112,7 +112,7 @@ func build(args []string) error {
 		//if _, ok := seenImages[d.ImageID]
 		log.V(1).Infof("Dependency ImageID: %s\n", d.ImageID)
 		if d.ImageID.Val != "" {
-			err = acirenderer.RenderImage(d.App, d.Labels, tmpdir, ds)
+			err = acirenderer.RenderACI(d.App, d.Labels, tmpdir, ds)
 			if err != nil {
 				return err
 			}

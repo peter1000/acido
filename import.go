@@ -32,8 +32,7 @@ func runImport(args []string) (exit int) {
 			log.Errorf("error: %v", err)
 			return 1
 		}
-		tmp := types.NewHashSHA256([]byte(img)).String()
-		key, err := ds.WriteACI(tmp, file)
+		key, err := ds.WriteACI(file, false)
 		file.Close()
 		if err != nil {
 			log.Errorf("%s: %v", img, err)
@@ -54,7 +53,7 @@ func runImport(args []string) (exit int) {
 			Value: "21.0.1",
 		},
 	}
-	ds.GetAci("example.com/fedora", labels, types.Hash{})
+	ds.GetACI("example.com/fedora", labels)
 
 	return 0
 }
